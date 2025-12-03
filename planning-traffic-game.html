@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planning Traffic - Interactive Mini-Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .game-container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            max-width: 800px;
+            width: 100%;
+        }
+
+        .game-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .game-header h1 {
+            color: #333;
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .game-info {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 15px;
+            padding: 15px;
+            background: #f0f4f8;
+            border-radius: 10px;
+        }
+
+        .info-item {
+            text-align: center;
+        }
+
+        .info-label {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .info-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .canvas-wrapper {
+            position: relative;
+            border: 3px solid #667eea;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #ffffff;
+        }
+
+        #gameCanvas {
+            display: block;
+            cursor: crosshair;
+            width: 100%;
+            height: auto;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            justify-content: center;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #e0e7ff;
+            color: #667eea;
+        }
+
+        .btn-secondary:hover {
+            background: #c7d2fe;
+        }
+
+        .message {
+            text-align: center;
+            padding: 15px;
+            margin-top: 15px;
+            border-radius: 8px;
+            font-weight: bold;
+            display: none;
+        }
+
+        .message.success {
+            background: #d1fae5;
+            color: #065f46;
+            display: block;
+        }
+
+        .message.error {
+            background: #fee2e2;
+            color: #991b1b;
+            display: block;
+        }
+
+        .message.info {
+            background: #dbeafe;
+            color: #1e40af;
+            display: block;
+        }
+
+        .instructions {
+            background: #f9fafb;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border-left: 4px solid #667eea;
+        }
+
+        .instructions h3 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+
+        .instructions ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .instructions li {
+            padding: 5px 0;
+            color: #555;
+            font-size: 14px;
+        }
+
+        .instructions li:before {
+            content: "→ ";
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .legend {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #555;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            border: 2px solid #333;
+        }
+
+        @media (max-width: 768px) {
+            .game-header h1 {
+                font-size: 24px;
+            }
+
+            .game-info {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .controls {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="game-header">
+            <h1>🚗 Planning Traffic</h1>
+        </div>
+
+        <div class="instructions">
+            <h3>How to Play:</h3>
+            <ul>
+                <li>Click and drag from the START arrow (bottom) to draw roads</li>
+                <li>Connect ALL orange destinations before reaching the END</li>
+                <li>Yellow zones can only be entered through gray entry points</li>
+                <li>Design the most efficient route - every segment = 100 meters</li>
+            </ul>
+        </div>
+
+        <div class="game-info">
+            <div class="info-item">
+                <div class="info-label">Road Length</div>
+                <div class="info-value" id="distance">0m</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Destinations</div>
+                <div class="info-value" id="destinations">0/8</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Status</div>
+                <div class="info-value" id="status">Drawing...</div>
+            </div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background: #ff9966;"></div>
+                <span>Destinations</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #ffff99;"></div>
+                <span>Restricted Zones</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #888;"></div>
+                <span>Entry Points</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #4444ff;"></div>
+                <span>Your Road</span>
+            </div>
+        </div>
+
+        <div class="canvas-wrapper">
+            <canvas id="gameCanvas" width="700" height="900"></canvas>
+        </div>
+
+        <div id="message" class="message"></div>
+
+        <div class="controls">
+            <button class="btn btn-primary" onclick="game.reset()">🔄 Reset Road</button>
+            <button class="btn btn-secondary" onclick="game.newLevel()">🎮 New Level</button>
+        </div>
+    </div>
+
+    <script>
+        class PlanningTrafficGame {
+            constructor() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.isDrawing = false;
+                this.roadPath = [];
+                this.destinations = [];
+                this.restrictedZones = [];
+                this.connectedDestinations = new Set();
+                this.gameComplete = false;
+                this.startPoint = { x: 350, y: 850 };
+                this.endPoint = { x: 350, y: 50 };
+
+                this.initializeLevel();
+                this.setupEventListeners();
+                this.draw();
+            }
+
+            initializeLevel() {
+                // Define destinations (orange areas)
+                this.destinations = [
+                    { x: 100, y: 720, width: 80, height: 60, label: 'Target', connected: false },
+                    { x: 220, y: 710, width: 70, height: 50, label: 'Ralphs', connected: false },
+                    { x: 100, y: 200, width: 50, height: 50, label: 'Bank', connected: false },
+                    { x: 270, y: 200, width: 50, height: 50, label: 'Aces', connected: false },
+                    { x: 100, y: 280, width: 50, height: 50, label: 'Cafe', connected: false },
+                    { x: 200, y: 270, width: 50, height: 50, label: 'Chevron', connected: false },
+                    { x: 420, y: 530, width: 70, height: 50, label: 'Pizza', connected: false },
+                    { x: 570, y: 690, width: 90, height: 80, label: "Macy's", connected: false },
+                    { x: 400, y: 240, width: 100, height: 80, label: 'Park', connected: false },
+                    { x: 540, y: 330, width: 60, height: 60, label: 'AMC', connected: false },
+                    { x: 640, y: 390, width: 50, height: 50, label: 'Cafe', connected: false },
+                    { x: 30, y: 410, width: 250, height: 100, label: 'Apartment', connected: false }
+                ];
+
+                // Define restricted zones (yellow areas with entry points)
+                this.restrictedZones = [
+                    {
+                        x: 30, y: 640, width: 240, height: 120,
+                        entryPoints: [
+                            { x1: 130, y1: 640, x2: 220, y2: 640 }, // top
+                            { x1: 30, y1: 710, x2: 80, y2: 760 } // left side
+                        ]
+                    },
+                    {
+                        x: 550, y: 670, width: 150, height: 110,
+                        entryPoints: [
+                            { x1: 550, y1: 720, x2: 620, y2: 780 } // left entry
+                        ]
+                    },
+                    {
+                        x: 360, y: 110, width: 110, height: 70,
+                        entryPoints: [
+                            { x1: 400, y1: 110, x2: 450, y2: 110 } // top
+                        ]
+                    }
+                ];
+
+                this.connectedDestinations.clear();
+                this.roadPath = [];
+                this.gameComplete = false;
+                this.updateUI();
+            }
+
+            setupEventListeners() {
+                this.canvas.addEventListener('mousedown', (e) => this.startDrawing(e));
+                this.canvas.addEventListener('mousemove', (e) => this.draw_road(e));
+                this.canvas.addEventListener('mouseup', () => this.stopDrawing());
+                this.canvas.addEventListener('mouseleave', () => this.stopDrawing());
+
+                // Touch support
+                this.canvas.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    const mouseEvent = new MouseEvent('mousedown', {
+                        clientX: touch.clientX,
+                        clientY: touch.clientY
+                    });
+                    this.canvas.dispatchEvent(mouseEvent);
+                });
+
+                this.canvas.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    const mouseEvent = new MouseEvent('mousemove', {
+                        clientX: touch.clientX,
+                        clientY: touch.clientY
+                    });
+                    this.canvas.dispatchEvent(mouseEvent);
+                });
+
+                this.canvas.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    const mouseEvent = new MouseEvent('mouseup', {});
+                    this.canvas.dispatchEvent(mouseEvent);
+                });
+            }
+
+            getMousePos(e) {
+                const rect = this.canvas.getBoundingClientRect();
+                const scaleX = this.canvas.width / rect.width;
+                const scaleY = this.canvas.height / rect.height;
+                return {
+                    x: (e.clientX - rect.left) * scaleX,
+                    y: (e.clientY - rect.top) * scaleY
+                };
+            }
+
+            startDrawing(e) {
+                if (this.gameComplete) return;
+
+                const pos = this.getMousePos(e);
+                const distToStart = Math.hypot(pos.x - this.startPoint.x, pos.y - this.startPoint.y);
+
+                if (distToStart < 30 || this.roadPath.length > 0) {
+                    this.isDrawing = true;
+                    if (this.roadPath.length === 0) {
+                        this.roadPath.push({ x: this.startPoint.x, y: this.startPoint.y });
+                    }
+                }
+            }
+
+            draw_road(e) {
+                if (!this.isDrawing) return;
+
+                const pos = this.getMousePos(e);
+                const lastPoint = this.roadPath[this.roadPath.length - 1];
+                const distance = Math.hypot(pos.x - lastPoint.x, pos.y - lastPoint.y);
+
+                if (distance > 5) {
+                    // Check if trying to enter restricted zone illegally
+                    if (this.isInRestrictedZone(pos) && !this.isNearEntryPoint(lastPoint, pos)) {
+                        this.showMessage('Cannot cross yellow zones! Use gray entry points.', 'error');
+                        return;
+                    }
+
+                    this.roadPath.push(pos);
+                    this.checkDestinationConnection(pos);
+                    this.updateUI();
+                    this.draw();
+
+                    // Check if reached end point
+                    const distToEnd = Math.hypot(pos.x - this.endPoint.x, pos.y - this.endPoint.y);
+                    if (distToEnd < 30) {
+                        this.finishGame();
+                    }
+                }
+            }
+
+            stopDrawing() {
+                this.isDrawing = false;
+            }
+
+            isInRestrictedZone(point) {
+                for (const zone of this.restrictedZones) {
+                    if (point.x >= zone.x && point.x <= zone.x + zone.width &&
+                        point.y >= zone.y && point.y <= zone.y + zone.height) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            isNearEntryPoint(lastPoint, currentPoint) {
+                for (const zone of this.restrictedZones) {
+                    for (const entry of zone.entryPoints) {
+                        if (this.isPointNearLine(lastPoint, entry) ||
+                            this.isPointNearLine(currentPoint, entry)) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+
+            isPointNearLine(point, line) {
+                const distance = this.distanceToLineSegment(point,
+                    { x: line.x1, y: line.y1 },
+                    { x: line.x2, y: line.y2 });
+                return distance < 20;
+            }
+
+            distanceToLineSegment(point, lineStart, lineEnd) {
+                const A = point.x - lineStart.x;
+                const B = point.y - lineStart.y;
+                const C = lineEnd.x - lineStart.x;
+                const D = lineEnd.y - lineStart.y;
+
+                const dot = A * C + B * D;
+                const lenSq = C * C + D * D;
+                let param = -1;
+
+                if (lenSq !== 0) param = dot / lenSq;
+
+                let xx, yy;
+
+                if (param < 0) {
+                    xx = lineStart.x;
+                    yy = lineStart.y;
+                } else if (param > 1) {
+                    xx = lineEnd.x;
+                    yy = lineEnd.y;
+                } else {
+                    xx = lineStart.x + param * C;
+                    yy = lineStart.y + param * D;
+                }
+
+                const dx = point.x - xx;
+                const dy = point.y - yy;
+                return Math.sqrt(dx * dx + dy * dy);
+            }
+
+            checkDestinationConnection(point) {
+                for (let i = 0; i < this.destinations.length; i++) {
+                    const dest = this.destinations[i];
+                    if (!dest.connected &&
+                        point.x >= dest.x && point.x <= dest.x + dest.width &&
+                        point.y >= dest.y && point.y <= dest.y + dest.height) {
+                        dest.connected = true;
+                        this.connectedDestinations.add(i);
+                    }
+                }
+            }
+
+            calculateRoadLength() {
+                let length = 0;
+                for (let i = 1; i < this.roadPath.length; i++) {
+                    const dx = this.roadPath[i].x - this.roadPath[i - 1].x;
+                    const dy = this.roadPath[i].y - this.roadPath[i - 1].y;
+                    length += Math.sqrt(dx * dx + dy * dy);
+                }
+                return Math.round(length * 10); // Each pixel represents ~10 meters
+            }
+
+            finishGame() {
+                this.isDrawing = false;
+                const allConnected = this.destinations.every(d => d.connected);
+
+                if (allConnected) {
+                    this.gameComplete = true;
+                    const finalDistance = this.calculateRoadLength();
+                    this.showMessage(`🎉 Excellent! You connected all destinations in ${finalDistance}m!`, 'success');
+                    document.getElementById('status').textContent = '✓ Complete';
+                } else {
+                    const remaining = this.destinations.filter(d => !d.connected).length;
+                    this.showMessage(`⚠️ You missed ${remaining} destination(s)! Go back and connect them all.`, 'error');
+                }
+            }
+
+            draw() {
+                // Clear canvas
+                this.ctx.fillStyle = '#ffffff';
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+                // Draw light grid
+                this.ctx.strokeStyle = '#f0f0f0';
+                this.ctx.lineWidth = 1;
+                for (let i = 0; i < this.canvas.width; i += 50) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(i, 0);
+                    this.ctx.lineTo(i, this.canvas.height);
+                    this.ctx.stroke();
+                }
+                for (let i = 0; i < this.canvas.height; i += 50) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(0, i);
+                    this.ctx.lineTo(this.canvas.width, i);
+                    this.ctx.stroke();
+                }
+
+                // Draw restricted zones
+                for (const zone of this.restrictedZones) {
+                    this.ctx.fillStyle = '#ffff99';
+                    this.ctx.fillRect(zone.x, zone.y, zone.width, zone.height);
+
+                    // Draw border
+                    this.ctx.strokeStyle = '#cccc66';
+                    this.ctx.lineWidth = 2;
+                    this.ctx.strokeRect(zone.x, zone.y, zone.width, zone.height);
+
+                    // Draw entry points
+                    for (const entry of zone.entryPoints) {
+                        this.ctx.strokeStyle = '#888888';
+                        this.ctx.lineWidth = 6;
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(entry.x1, entry.y1);
+                        this.ctx.lineTo(entry.x2, entry.y2);
+                        this.ctx.stroke();
+                    }
+                }
+
+                // Draw destinations
+                for (const dest of this.destinations) {
+                    this.ctx.fillStyle = dest.connected ? '#66cc66' : '#ff9966';
+                    this.ctx.fillRect(dest.x, dest.y, dest.width, dest.height);
+
+                    this.ctx.strokeStyle = dest.connected ? '#339933' : '#cc6633';
+                    this.ctx.lineWidth = 2;
+                    this.ctx.strokeRect(dest.x, dest.y, dest.width, dest.height);
+
+                    // Draw label
+                    this.ctx.fillStyle = '#333';
+                    this.ctx.font = 'bold 12px Arial';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.textBaseline = 'middle';
+                    this.ctx.fillText(dest.label, dest.x + dest.width / 2, dest.y + dest.height / 2);
+
+                    // Draw checkmark if connected
+                    if (dest.connected) {
+                        this.ctx.fillStyle = '#fff';
+                        this.ctx.font = 'bold 16px Arial';
+                        this.ctx.fillText('✓', dest.x + dest.width - 12, dest.y + 12);
+                    }
+                }
+
+                // Draw start point
+                this.ctx.fillStyle = '#ff4444';
+                this.ctx.beginPath();
+                this.ctx.arc(this.startPoint.x, this.startPoint.y, 15, 0, Math.PI * 2);
+                this.ctx.fill();
+
+                // Draw arrow
+                this.ctx.fillStyle = '#fff';
+                this.ctx.font = 'bold 20px Arial';
+                this.ctx.textAlign = 'center';
+                this.ctx.textBaseline = 'middle';
+                this.ctx.fillText('↑', this.startPoint.x, this.startPoint.y);
+
+                // Draw end point
+                this.ctx.fillStyle = '#44ff44';
+                this.ctx.beginPath();
+                this.ctx.arc(this.endPoint.x, this.endPoint.y, 15, 0, Math.PI * 2);
+                this.ctx.fill();
+
+                this.ctx.fillStyle = '#333';
+                this.ctx.font = 'bold 10px Arial';
+                this.ctx.fillText('END', this.endPoint.x, this.endPoint.y);
+
+                // Draw road path
+                if (this.roadPath.length > 1) {
+                    this.ctx.strokeStyle = '#4444ff';
+                    this.ctx.lineWidth = 6;
+                    this.ctx.lineCap = 'round';
+                    this.ctx.lineJoin = 'round';
+
+                    // Draw shadow for depth
+                    this.ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+                    this.ctx.shadowBlur = 4;
+                    this.ctx.shadowOffsetX = 2;
+                    this.ctx.shadowOffsetY = 2;
+
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(this.roadPath[0].x, this.roadPath[0].y);
+                    for (let i = 1; i < this.roadPath.length; i++) {
+                        this.ctx.lineTo(this.roadPath[i].x, this.roadPath[i].y);
+                    }
+                    this.ctx.stroke();
+
+                    // Reset shadow
+                    this.ctx.shadowColor = 'transparent';
+                    this.ctx.shadowBlur = 0;
+                    this.ctx.shadowOffsetX = 0;
+                    this.ctx.shadowOffsetY = 0;
+                }
+            }
+
+            updateUI() {
+                const distance = this.calculateRoadLength();
+                document.getElementById('distance').textContent = `${distance}m`;
+
+                const connected = this.connectedDestinations.size;
+                const total = this.destinations.length;
+                document.getElementById('destinations').textContent = `${connected}/${total}`;
+
+                if (!this.gameComplete) {
+                    document.getElementById('status').textContent = this.isDrawing ? '🖊️ Drawing' : '⏸️ Paused';
+                }
+            }
+
+            showMessage(text, type) {
+                const messageEl = document.getElementById('message');
+                messageEl.textContent = text;
+                messageEl.className = `message ${type}`;
+
+                if (type !== 'success') {
+                    setTimeout(() => {
+                        messageEl.className = 'message';
+                    }, 3000);
+                }
+            }
+
+            reset() {
+                this.roadPath = [];
+                this.connectedDestinations.clear();
+                this.destinations.forEach(d => d.connected = false);
+                this.gameComplete = false;
+                this.updateUI();
+                this.draw();
+                this.showMessage('Road reset! Start drawing from the START arrow.', 'info');
+                setTimeout(() => {
+                    document.getElementById('message').className = 'message';
+                }, 2000);
+            }
+
+            newLevel() {
+                // Randomize destination positions slightly for variety
+                this.destinations.forEach(dest => {
+                    dest.x += Math.random() * 20 - 10;
+                    dest.y += Math.random() * 20 - 10;
+                    dest.connected = false;
+                });
+                this.reset();
+                this.showMessage('New level generated! Plan your route carefully.', 'info');
+                setTimeout(() => {
+                    document.getElementById('message').className = 'message';
+                }, 2000);
+            }
+        }
+
+        // Initialize game when page loads
+        let game;
+        window.addEventListener('load', () => {
+            game = new PlanningTrafficGame();
+        });
+    </script>
+</body>
+</html>
