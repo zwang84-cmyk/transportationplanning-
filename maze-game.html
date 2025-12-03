@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maze Exploration Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        #gameContainer {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 2em;
+        }
+
+        #gameCanvas {
+            border: 3px solid #333;
+            border-radius: 10px;
+            cursor: crosshair;
+            display: block;
+        }
+
+        #gameInfo {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+            font-size: 1.2em;
+            color: #333;
+            font-weight: bold;
+        }
+
+        .info-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .heart {
+            color: #e74c3c;
+            font-size: 1.5em;
+        }
+
+        .flashlight {
+            color: #f39c12;
+            font-size: 1.5em;
+        }
+
+        #instructions {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            color: #555;
+            line-height: 1.6;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            max-width: 400px;
+        }
+
+        .modal-content h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 2em;
+        }
+
+        .modal-content p {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.2em;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 30px;
+            font-size: 1.2em;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .btn:hover {
+            transform: scale(1.05);
+        }
+
+        .active {
+            display: flex !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <h1>🏠 Maze Exploration 🔦</h1>
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="gameInfo">
+            <div class="info-item">
+                <span>Lives:</span>
+                <span id="livesDisplay"></span>
+            </div>
+            <div class="info-item">
+                <span>Flashlights:</span>
+                <span id="flashlightsDisplay"></span>
+            </div>
+            <div class="info-item">
+                <span id="statusText">Click to use flashlight!</span>
+            </div>
+        </div>
+        <div id="instructions">
+            <strong>How to Play:</strong><br>
+            1. Click to activate the flashlight and explore the maze (10 seconds each, 3 uses)<br>
+            2. After flashlight ends, move your mouse to guide the character home<br>
+            3. Avoid dead ends or you'll lose a life!<br>
+            4. Character has limited vision during movement
+        </div>
+    </div>
+
+    <div id="gameOverModal" class="modal">
+        <div class="modal-content">
+            <h2>😢 Help Failed</h2>
+            <p>The character couldn't find their way home. Better luck next time!</p>
+            <button class="btn" onclick="game.restart()">Restart Game</button>
+        </div>
+    </div>
+
+    <div id="winModal" class="modal">
+        <div class="modal-content">
+            <h2>🎉 Congratulations!</h2>
+            <p>You successfully guided the character home!</p>
+            <button class="btn" onclick="game.restart()">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        class MazeGame {
+            constructor() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.width = this.canvas.width;
+                this.height = this.canvas.height;
+
+                // Game state
+                this.lives = 3;
+                this.flashlightsRemaining = 3;
+                this.flashlightActive = false;
+                this.flashlightTimer = 0;
+                this.flashlightDuration = 10; // seconds
+                this.gameState = 'waiting'; // waiting, flashlight, moving, gameOver, won
+
+                // Mouse position
+                this.mouseX = 0;
+                this.mouseY = 0;
+
+                // Character
+                this.character = {
+                    x: 50,
+                    y: 50,
+                    radius: 12,
+                    visionRadius: 40,
+                    path: [],
+                    moving: false
+                };
+
+                // Home position
+                this.home = {
+                    x: this.width - 80,
+                    y: this.height - 80,
+                    width: 60,
+                    height: 70
+                };
+
+                // Generate maze
+                this.generateMaze();
+
+                // Event listeners
+                this.canvas.addEventListener('mousemove', this.handleMouseMove.bind(this));
+                this.canvas.addEventListener('click', this.handleClick.bind(this));
+
+                // Start game loop
+                this.lastTime = Date.now();
+                this.gameLoop();
+            }
+
+            generateMaze() {
+                // Create a maze with multiple paths
+                this.maze = {
+                    paths: [],
+                    deadEnds: []
+                };
+
+                // Main correct path (from character to home)
+                const correctPath = [
+                    { x: 50, y: 50, width: 150, height: 40 },
+                    { x: 170, y: 50, width: 40, height: 150 },
+                    { x: 170, y: 170, width: 200, height: 40 },
+                    { x: 340, y: 170, width: 40, height: 180 },
+                    { x: 340, y: 320, width: 250, height: 40 },
+                    { x: 560, y: 320, width: 40, height: 150 },
+                    { x: 560, y: 440, width: 180, height: 40 }
+                ];
+
+                // Dead end paths
+                const deadEnds = [
+                    // Dead end 1 (from first segment)
+                    { x: 100, y: 50, width: 40, height: 120 },
+
+                    // Dead end 2 (from second turn)
+                    { x: 170, y: 100, width: 120, height: 40 },
+
+                    // Dead end 3 (from middle horizontal)
+                    { x: 220, y: 170, width: 40, height: 100 },
+
+                    // Dead end 4 (from vertical segment)
+                    { x: 340, y: 220, width: 150, height: 40 },
+
+                    // Dead end 5 (complex)
+                    { x: 450, y: 320, width: 40, height: 90 },
+                    { x: 400, y: 380, width: 90, height: 40 },
+
+                    // Dead end 6 (from last vertical)
+                    { x: 560, y: 370, width: 100, height: 40 }
+                ];
+
+                this.maze.correctPath = correctPath;
+                this.maze.deadEnds = deadEnds;
+                this.maze.allPaths = [...correctPath, ...deadEnds];
+            }
+
+            handleMouseMove(e) {
+                const rect = this.canvas.getBoundingClientRect();
+                this.mouseX = e.clientX - rect.left;
+                this.mouseY = e.clientY - rect.top;
+
+                if (this.gameState === 'moving' && this.character.moving) {
+                    // Add to character path
+                    this.character.path.push({ x: this.mouseX, y: this.mouseY });
+
+                    // Move character along path
+                    if (this.character.path.length > 0) {
+                        const target = this.character.path[0];
+                        const dx = target.x - this.character.x;
+                        const dy = target.y - this.character.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+
+                        if (dist < 5) {
+                            this.character.path.shift();
+                        } else {
+                            const speed = 2;
+                            this.character.x += (dx / dist) * speed;
+                            this.character.y += (dy / dist) * speed;
+                        }
+                    }
+                }
+            }
+
+            handleClick() {
+                if (this.gameState === 'waiting' && this.flashlightsRemaining > 0) {
+                    this.startFlashlight();
+                } else if (this.gameState === 'flashlight') {
+                    // Can click during flashlight to start moving early
+                    this.endFlashlight();
+                }
+            }
+
+            startFlashlight() {
+                this.gameState = 'flashlight';
+                this.flashlightActive = true;
+                this.flashlightTimer = this.flashlightDuration;
+                this.flashlightsRemaining--;
+                this.updateDisplay();
+            }
+
+            endFlashlight() {
+                this.flashlightActive = false;
+                this.gameState = 'moving';
+                this.character.moving = true;
+                this.character.path = [];
+                this.updateDisplay();
+            }
+
+            checkCollision() {
+                // Check if character is on a valid path
+                let onPath = false;
+
+                for (let path of this.maze.allPaths) {
+                    if (this.character.x >= path.x - this.character.radius &&
+                        this.character.x <= path.x + path.width + this.character.radius &&
+                        this.character.y >= path.y - this.character.radius &&
+                        this.character.y <= path.y + path.height + this.character.radius) {
+                        onPath = true;
+
+                        // Check if on dead end
+                        if (this.maze.deadEnds.includes(path)) {
+                            // Check if at the end of dead end
+                            const centerX = this.character.x;
+                            const centerY = this.character.y;
+
+                            if (path.width > path.height) {
+                                // Horizontal path - check if at right end
+                                if (centerX > path.x + path.width - 20) {
+                                    return 'deadend';
+                                }
+                            } else {
+                                // Vertical path - check if at bottom end
+                                if (centerY > path.y + path.height - 20) {
+                                    return 'deadend';
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+
+                if (!onPath && this.character.moving) {
+                    return 'offpath';
+                }
+
+                // Check if reached home
+                if (Math.sqrt(
+                    Math.pow(this.character.x - (this.home.x + this.home.width/2), 2) +
+                    Math.pow(this.character.y - (this.home.y + this.home.height/2), 2)
+                ) < 50) {
+                    return 'home';
+                }
+
+                return 'ok';
+            }
+
+            loseLife() {
+                this.lives--;
+                this.character.x = 50;
+                this.character.y = 50;
+                this.character.moving = false;
+                this.character.path = [];
+
+                if (this.lives <= 0) {
+                    this.gameState = 'gameOver';
+                    document.getElementById('gameOverModal').classList.add('active');
+                } else {
+                    this.gameState = 'waiting';
+                }
+
+                this.updateDisplay();
+            }
+
+            winGame() {
+                this.gameState = 'won';
+                document.getElementById('winModal').classList.add('active');
+            }
+
+            updateDisplay() {
+                // Update lives
+                let livesHTML = '';
+                for (let i = 0; i < this.lives; i++) {
+                    livesHTML += '<span class="heart">❤️</span>';
+                }
+                document.getElementById('livesDisplay').innerHTML = livesHTML;
+
+                // Update flashlights
+                let flashlightsHTML = '';
+                for (let i = 0; i < this.flashlightsRemaining; i++) {
+                    flashlightsHTML += '<span class="flashlight">🔦</span>';
+                }
+                document.getElementById('flashlightsDisplay').innerHTML = flashlightsHTML;
+
+                // Update status
+                const statusText = document.getElementById('statusText');
+                if (this.gameState === 'waiting') {
+                    statusText.textContent = 'Click to use flashlight!';
+                } else if (this.gameState === 'flashlight') {
+                    statusText.textContent = `Exploring... ${Math.ceil(this.flashlightTimer)}s`;
+                } else if (this.gameState === 'moving') {
+                    statusText.textContent = 'Guide the character home!';
+                }
+            }
+
+            draw() {
+                // Clear canvas
+                this.ctx.fillStyle = '#D2B48C'; // Light brown background
+                this.ctx.fillRect(0, 0, this.width, this.height);
+
+                // Draw maze paths (always visible during flashlight or in character vision)
+                this.ctx.fillStyle = 'white';
+                for (let path of this.maze.allPaths) {
+                    this.ctx.fillRect(path.x, path.y, path.width, path.height);
+                }
+
+                // Draw home
+                this.ctx.fillStyle = '#8B7355';
+                this.ctx.fillRect(this.home.x, this.home.y + 20, this.home.width, this.home.height - 20);
+
+                // Draw roof
+                this.ctx.fillStyle = '#A0522D';
+                this.ctx.beginPath();
+                this.ctx.moveTo(this.home.x - 10, this.home.y + 20);
+                this.ctx.lineTo(this.home.x + this.home.width / 2, this.home.y);
+                this.ctx.lineTo(this.home.x + this.home.width + 10, this.home.y + 20);
+                this.ctx.closePath();
+                this.ctx.fill();
+
+                // Draw door
+                this.ctx.fillStyle = '#654321';
+                this.ctx.fillRect(this.home.x + 20, this.home.y + 50, 20, 30);
+
+                // Draw cloud overlay
+                if (!this.flashlightActive && this.gameState !== 'won') {
+                    this.ctx.fillStyle = 'rgba(173, 216, 230, 0.85)'; // Light blue clouds
+
+                    if (this.gameState === 'moving') {
+                        // During movement, create hole around character
+                        this.ctx.save();
+                        this.ctx.globalCompositeOperation = 'source-over';
+                        this.ctx.fillRect(0, 0, this.width, this.height);
+
+                        this.ctx.globalCompositeOperation = 'destination-out';
+                        this.ctx.beginPath();
+                        this.ctx.arc(this.character.x, this.character.y, this.character.visionRadius, 0, Math.PI * 2);
+                        this.ctx.fill();
+                        this.ctx.restore();
+                    } else {
+                        // Full cloud cover
+                        this.ctx.fillRect(0, 0, this.width, this.height);
+                    }
+                }
+
+                // Draw flashlight circle during flashlight mode
+                if (this.flashlightActive) {
+                    this.ctx.save();
+                    this.ctx.fillStyle = 'rgba(173, 216, 230, 0.85)';
+                    this.ctx.fillRect(0, 0, this.width, this.height);
+
+                    // Create circular reveal
+                    this.ctx.globalCompositeOperation = 'destination-out';
+                    this.ctx.beginPath();
+                    this.ctx.arc(this.mouseX, this.mouseY, 120, 0, Math.PI * 2);
+                    this.ctx.fill();
+
+                    this.ctx.restore();
+
+                    // Draw flashlight beam outline
+                    this.ctx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
+                    this.ctx.lineWidth = 3;
+                    this.ctx.beginPath();
+                    this.ctx.arc(this.mouseX, this.mouseY, 120, 0, Math.PI * 2);
+                    this.ctx.stroke();
+                }
+
+                // Draw character
+                this.ctx.fillStyle = '#FFD700';
+                this.ctx.beginPath();
+                this.ctx.arc(this.character.x, this.character.y, this.character.radius, 0, Math.PI * 2);
+                this.ctx.fill();
+
+                // Character outline
+                this.ctx.strokeStyle = '#FFA500';
+                this.ctx.lineWidth = 2;
+                this.ctx.stroke();
+
+                // Character eyes
+                this.ctx.fillStyle = 'black';
+                this.ctx.beginPath();
+                this.ctx.arc(this.character.x - 4, this.character.y - 3, 2, 0, Math.PI * 2);
+                this.ctx.arc(this.character.x + 4, this.character.y - 3, 2, 0, Math.PI * 2);
+                this.ctx.fill();
+            }
+
+            update(deltaTime) {
+                if (this.gameState === 'flashlight') {
+                    this.flashlightTimer -= deltaTime;
+                    this.updateDisplay();
+
+                    if (this.flashlightTimer <= 0) {
+                        this.endFlashlight();
+                    }
+                }
+
+                if (this.gameState === 'moving') {
+                    const collision = this.checkCollision();
+
+                    if (collision === 'deadend' || collision === 'offpath') {
+                        this.loseLife();
+                    } else if (collision === 'home') {
+                        this.winGame();
+                    }
+
+                    // Check if flashlights exhausted and not moving
+                    if (this.flashlightsRemaining <= 0 && !this.character.moving) {
+                        if (this.lives > 0) {
+                            this.gameState = 'gameOver';
+                            document.getElementById('gameOverModal').classList.add('active');
+                        }
+                    }
+                }
+            }
+
+            gameLoop() {
+                const currentTime = Date.now();
+                const deltaTime = (currentTime - this.lastTime) / 1000;
+                this.lastTime = currentTime;
+
+                this.update(deltaTime);
+                this.draw();
+
+                requestAnimationFrame(() => this.gameLoop());
+            }
+
+            restart() {
+                document.getElementById('gameOverModal').classList.remove('active');
+                document.getElementById('winModal').classList.remove('active');
+
+                this.lives = 3;
+                this.flashlightsRemaining = 3;
+                this.flashlightActive = false;
+                this.flashlightTimer = 0;
+                this.gameState = 'waiting';
+
+                this.character.x = 50;
+                this.character.y = 50;
+                this.character.moving = false;
+                this.character.path = [];
+
+                this.updateDisplay();
+            }
+        }
+
+        // Start game when page loads
+        window.addEventListener('load', () => {
+            window.game = new MazeGame();
+        });
+    </script>
+</body>
+</html>
